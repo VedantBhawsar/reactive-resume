@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { createFileRoute } from "@tanstack/react-router";
 
+import { auth } from "@/integrations/auth/config";
+
 import { registerPrompts } from "./-helpers/prompts";
 import { registerResources } from "./-helpers/resources";
 import { registerTools } from "./-helpers/tools";
@@ -35,13 +37,30 @@ function createMcpServer() {
   return server;
 }
 
+async function authenticateRequest(request: Request): Promise<void> {
+  // Try OAuth Bearer token first (for claude.ai and other MCP OAuth clients)
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const session = await auth.api.getMcpSession({ headers: request.headers });
+    if (session) return;
+  }
+
+  // Fall back to API key authentication
+  const apiKey = request.headers.get("x-api-key");
+  if (apiKey) {
+    const result = await auth.api.verifyApiKey({ body: { key: apiKey } });
+    if (result.valid) return;
+  }
+
+  throw new Error("Unauthorized");
+}
+
 export const Route = createFileRoute("/mcp/")({
   server: {
     handlers: {
       ANY: async ({ request }) => {
         try {
-          const apiKey = request.headers.get("x-api-key");
-          if (!apiKey) throw new Error("Unauthorized");
+          await authenticateRequest(request);
 
           const server = createMcpServer();
           const transport = new WebStandardStreamableHTTPServerTransport({
@@ -54,12 +73,29 @@ export const Route = createFileRoute("/mcp/")({
         } catch (error) {
           console.error("[MCP]", error);
 
+          const message = error instanceof Error ? error.message : String(error);
+          const isAuthError = message === "Unauthorized";
+
+          if (isAuthError) {
+            return new Response(JSON.stringify({
+              id: null,
+              jsonrpc: "2.0",
+              error: { code: -32603, message: "Unauthorized" },
+            }), {
+              status: 401,
+              headers: {
+                "Content-Type": "application/json",
+                "WWW-Authenticate": "Bearer",
+              },
+            });
+          }
+
           return Response.json({
             id: null,
             jsonrpc: "2.0",
             error: {
               code: -32603,
-              message: `Error handling request: ${error instanceof Error ? error.message : String(error)}`,
+              message: `Error handling request: ${message}`,
             },
           });
         }

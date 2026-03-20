@@ -4,7 +4,7 @@ import { apiKey } from "@better-auth/api-key";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { dash } from "@better-auth/infra";
 import { BetterAuthError, betterAuth } from "better-auth";
-import { openAPI } from "better-auth/plugins";
+import { mcp, openAPI } from "better-auth/plugins";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { username } from "better-auth/plugins/username";
@@ -232,6 +232,7 @@ const getAuthConfig = () => {
 
     plugins: [
       openAPI(),
+      mcp({ loginPage: "/auth/login" }),
       genericOAuth({ config: authConfigs }),
       twoFactor({ issuer: "Reactive Resume" }),
       apiKey({ enableSessionForAPIKeys: true, rateLimit: { enabled: false } }),

@@ -269,8 +269,98 @@ export const apikey = pg.pgTable(
   ],
 );
 
+export const oauthApplication = pg.pgTable(
+  "oauth_application",
+  {
+    id: pg
+      .uuid("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    clientId: pg.text("client_id").notNull().unique(),
+    clientSecret: pg.text("client_secret"),
+    name: pg.text("name").notNull(),
+    icon: pg.text("icon"),
+    redirectUrls: pg.text("redirect_urls").notNull(),
+    metadata: pg.text("metadata"),
+    type: pg.text("type").notNull().default("web"),
+    disabled: pg.boolean("disabled").notNull().default(false),
+    userId: pg.uuid("user_id").references(() => user.id, { onDelete: "cascade" }),
+    createdAt: pg.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: pg
+      .timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date()),
+  },
+  (t) => [pg.index().on(t.clientId)],
+);
+
+export const oauthAccessToken = pg.pgTable(
+  "oauth_access_token",
+  {
+    id: pg
+      .uuid("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    accessToken: pg.text("access_token").notNull(),
+    refreshToken: pg.text("refresh_token"),
+    accessTokenExpiresAt: pg.timestamp("access_token_expires_at", { withTimezone: true }).notNull(),
+    refreshTokenExpiresAt: pg.timestamp("refresh_token_expires_at", { withTimezone: true }),
+    clientId: pg.text("client_id").notNull(),
+    userId: pg.uuid("user_id").references(() => user.id, { onDelete: "cascade" }),
+    scopes: pg.text("scopes"),
+    createdAt: pg.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: pg
+      .timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date()),
+  },
+  (t) => [pg.index().on(t.accessToken), pg.index().on(t.refreshToken)],
+);
+
+export const oauthConsent = pg.pgTable(
+  "oauth_consent",
+  {
+    id: pg
+      .uuid("id")
+      .notNull()
+      .primaryKey()
+      .$defaultFn(() => generateId()),
+    userId: pg
+      .uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    clientId: pg.text("client_id").notNull(),
+    scopes: pg.text("scopes"),
+    consentGiven: pg.boolean("consent_given").notNull().default(false),
+    createdAt: pg.timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: pg
+      .timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date()),
+  },
+  (t) => [pg.index().on(t.userId, t.clientId)],
+);
+
 export const relations = defineRelations(
-  { user, session, account, verification, twoFactor, passkey, resume, resumeStatistics, apikey },
+  {
+    user,
+    session,
+    account,
+    verification,
+    twoFactor,
+    passkey,
+    resume,
+    resumeStatistics,
+    apikey,
+    oauthApplication,
+    oauthAccessToken,
+    oauthConsent,
+  },
   (r) => ({
     user: {
       sessions: r.many.session(),
@@ -279,6 +369,9 @@ export const relations = defineRelations(
       passkeys: r.many.passkey(),
       resumes: r.many.resume(),
       apiKeys: r.many.apikey(),
+      oauthApplications: r.many.oauthApplication(),
+      oauthAccessTokens: r.many.oauthAccessToken(),
+      oauthConsents: r.many.oauthConsent(),
     },
     session: {
       user: r.one.user({
@@ -323,6 +416,24 @@ export const relations = defineRelations(
     apikey: {
       user: r.one.user({
         from: r.apikey.referenceId,
+        to: r.user.id,
+      }),
+    },
+    oauthApplication: {
+      user: r.one.user({
+        from: r.oauthApplication.userId,
+        to: r.user.id,
+      }),
+    },
+    oauthAccessToken: {
+      user: r.one.user({
+        from: r.oauthAccessToken.userId,
+        to: r.user.id,
+      }),
+    },
+    oauthConsent: {
+      user: r.one.user({
+        from: r.oauthConsent.userId,
         to: r.user.id,
       }),
     },
