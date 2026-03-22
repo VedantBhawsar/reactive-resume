@@ -16,6 +16,20 @@ interface ORPCContext {
   reqHeaders?: Headers;
 }
 
+async function getUserFromBearerToken(headers: Headers): Promise<User | null> {
+  try {
+    const authHeader = headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) return null;
+
+    const session = await auth.api.getMcpSession({ headers });
+    if (!session?.user) return null;
+
+    return session.user;
+  } catch {
+    return null;
+  }
+}
+
 async function getUserFromHeaders(headers: Headers): Promise<User | null> {
   try {
     const result = await auth.api.getSession({ headers });
@@ -47,7 +61,9 @@ export const publicProcedure = base.use(async ({ context, next }) => {
   const headers = context.reqHeaders ?? new Headers();
   const apiKey = headers.get("x-api-key");
 
-  const user = apiKey ? await getUserFromApiKey(apiKey) : await getUserFromHeaders(headers);
+  const user = apiKey
+    ? await getUserFromApiKey(apiKey)
+    : (await getUserFromBearerToken(headers)) ?? (await getUserFromHeaders(headers));
 
   return next({
     context: {
