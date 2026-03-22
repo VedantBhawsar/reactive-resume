@@ -21,10 +21,11 @@ async function getUserFromBearerToken(headers: Headers): Promise<User | null> {
     const authHeader = headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) return null;
 
-    const session = await auth.api.getMcpSession({ headers });
-    if (!session?.user) return null;
+    const token = await auth.api.getMcpSession({ headers });
+    if (!token?.userId) return null;
 
-    return session.user;
+    const [userResult] = await db.select().from(user).where(eq(user.id, token.userId)).limit(1);
+    return userResult ?? null;
   } catch {
     return null;
   }
